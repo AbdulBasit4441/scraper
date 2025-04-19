@@ -12,6 +12,10 @@ driver = webdriver.Chrome()
 driver.get("https://www.linkedin.com/login")
 wait = WebDriverWait(driver, 15)
 
+def scroll_and_click(elem):
+    driver.execute_script("arguments[0].scrollIntoView({behavior: 'smooth', block: 'center'});", elem)
+    elem.click()
+
 def login():
     username_input = wait.until(EC.presence_of_element_located((By.ID, "username")))
     password_input = driver.find_element(By.ID, "password")
@@ -23,49 +27,44 @@ def search():
     search_input = wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, ".search-global-typeahead__input")))
     search_input.send_keys("oxford university")
     search_input.send_keys(Keys.RETURN)
-
+    
 def filters():
     people = wait.until(EC.element_to_be_clickable((By.XPATH, "//button[text()='People']")))
-    people.click()
-    category1 =wait.until(EC.element_to_be_clickable((By.XPATH, "//button[text()='1st']")))
-    category1.click()
-    category2 =wait.until(EC.element_to_be_clickable((By.XPATH, "//button[text()='2nd']")))
-    category2.click()
-    category3 =wait.until(EC.element_to_be_clickable((By.XPATH, "//button[text()='3rd+']")))
-    category3.click()
-    checkbox_label = wait.until(EC.element_to_be_clickable((By.ID, "searchFilter_geoUrn")))
-    checkbox_label.click()
-    location_input = wait.until(EC.presence_of_element_located((By.CSS_SELECTOR,"input[placeholder= 'Add a location']")))
-    location_input.send_keys("United Kingdom")
-    checkbox_label = wait.until(EC.element_to_be_clickable((By.XPATH, "//label[@for='geoUrn-101165590']")))
-    checkbox_label.click()
-    apply_button = wait.until(EC.element_to_be_clickable((By.XPATH, "//button//span[text()='Show results']/..")))
-    apply_button.click()
+    scroll_and_click(people)
+    one = wait.until(EC.element_to_be_clickable((By.XPATH,"//button[text()='1st']")))
+    one.click()
+    sec = wait.until(EC.element_to_be_clickable((By.XPATH,"//button[text()='2nd']")))
+    sec.click()
+    third = wait.until(EC.element_to_be_clickable((By.XPATH,"//button[text()='3rd+']")))
+    third.click()
 
-def allfilters():
-    allfilter = wait.until(EC.element_to_be_clickable((By.XPATH, "//button[text()='All filters']")))
-    allfilter.click()
-    filter_panel = wait.until(EC.visibility_of_element_located((By.XPATH, "//div[@role='dialog']")))
+def open_all_filters():
+    all_filters_btn = wait.until(EC.element_to_be_clickable((By.XPATH, "//button[text()='All filters']")))
+    scroll_and_click(all_filters_btn)
 
-    # === Step 4: Find and click all checkboxes inside the filter panel ===
-    checkboxes = filter_panel.find_elements(By.XPATH, ".//input[@type='checkbox']")
+def click_all_checkboxes():
+    time.sleep(2)
+    checkboxes = driver.find_elements(By.XPATH, "//input[@type='checkbox']")
+    print(f"Total checkboxes found: {len(checkboxes)}")
 
     for checkbox in checkboxes:
-        if not checkbox.is_selected():
-          try:
-            checkbox.click()
-          except:
-            # If checkbox is hidden, click the label instead
-            label = checkbox.find_element(By.XPATH, "./ancestor::label")
-            driver.execute_script("arguments[0].click();", label)
+        try:
+            checkbox_id = checkbox.get_attribute("id")
+            if checkbox_id:
+                label = driver.find_element(By.XPATH, f"//label[@for='{checkbox_id}']")
+                driver.execute_script("arguments[0].scrollIntoView({behavior: 'smooth', block: 'center'});", label)
+                label.click()
+                time.sleep(0.1)  
+        except Exception as e:
+            print(f"Error clicking checkbox: {e}")
 
-    show_results_btn = wait.until(EC.element_to_be_clickable((By.XPATH, "//button[contains(text(), 'Show results')]")))
-    show_results_btn.click()
 
-       
 login()
 search()
 filters()
-allfilters()
+open_all_filters()
+click_all_checkboxes()
+show = wait.until(EC.element_to_be_clickable((By.XPATH, "//button[contains(., 'Show results')]")))
+scroll_and_click(show)
 time.sleep(60)
 driver.quit()
