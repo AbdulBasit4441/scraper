@@ -4,6 +4,7 @@ from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 import time
+import pandas as pd
 
 USERNAME = "ab5129326@gmail.com"
 PASSWORD = "AAbb321@"
@@ -88,7 +89,7 @@ def click_all_checkboxes():
             print(f"Error clicking checkbox: {e}")
 
 def scroll_to_load():
-    scroll_pause = 2
+    scroll_pause = 1
     screen_height = driver.execute_script("return window.innerHeight")
     scroll_height = driver.execute_script("return document.body.scrollHeight")
 
@@ -100,21 +101,20 @@ def scroll_to_load():
         scroll_height = driver.execute_script("return document.body.scrollHeight")
 
 def getLinks(driver, wait):
-    # wait for at least one real-profile anchor to appear
     try:
         wait.until(EC.presence_of_element_located((
             By.CSS_SELECTOR,
-            "li.ZEMKWShUEvptWlRHdUwqKAevVHDrTs a[data-test-app-aware-link]"
+            "ul.OTwhyBrRIjzkDqCQWvaMgSgHXVjmkFiPnI a[data-test-app-aware-link]"
         )))
     except:
         print("No profile links found on page.")
         return []
 
-    time.sleep(3)   # give JS a moment to finish rendering
+    time.sleep(3)
 
     anchors = driver.find_elements(
         By.CSS_SELECTOR,
-        "li.ZEMKWShUEvptWlRHdUwqKAevVHDrTs a[data-test-app-aware-link]"
+        "ul.OTwhyBrRIjzkDqCQWvaMgSgHXVjmkFiPnI a[data-test-app-aware-link]"
     )
 
     profile_links = []
@@ -130,6 +130,7 @@ def getLinks(driver, wait):
 
     return profile_links
 
+# Start Process
 login()
 search()
 filters()
@@ -139,9 +140,13 @@ click_all_checkboxes()
 show = wait.until(EC.element_to_be_clickable((By.XPATH, "//button[contains(., 'Show results')]")))
 scroll_and_click(show)
 time.sleep(5)
+
+all_profiles = []
+
 while True:
     scroll_to_load()
-    profiles =  getLinks(driver, wait)
+    profiles = getLinks(driver, wait)
+    all_profiles.extend(profiles)
 
     try:
         next_button = wait.until(EC.element_to_be_clickable((By.XPATH, "//button[@aria-label='Next']")))
@@ -156,5 +161,33 @@ while True:
         print("No more pages or error finding next button:", e)
         break
 
-print("Finished scraping.")
+all_profiles = list(set(all_profiles))
+
+#  NEW FEATURE: Check education section for "Currently Studying"
+currently_studying_profiles = []
+
+for link in all_profiles:
+    driver.get(link)
+    time.sleep(3)
+    driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+    time.sleep(2)
+
+    try:
+        edu_entries = driver.find_elements(By.XPATH, "//section[contains(@id, 'education')]//li")
+        for entry in edu_entries:
+            if "present" in entry.text.lower() or "currently" in entry.text.lower():
+                currently_studying_profiles.append(link)
+                print(f" Currently studying: {link}")
+                break
+    except Exception as e:
+        print(f" Error checking education for {link}: {e}")
+
+#  Save all profiles and filtered ones
+df_all = pd.DataFrame({'Profile Links': all_profiles})
+df_all.to_excel('linkedin_all_profiles.xlsx', index=False)
+
+df_current = pd.DataFrame({'Currently Studying Profiles': currently_studying_profiles})
+df_current.to_excel('linkedin_currently_studying_profiles.xlsx', index=False)
+
+print(" Profile data saved successfully.")
 driver.quit()
