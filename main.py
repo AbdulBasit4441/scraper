@@ -25,9 +25,14 @@ def login():
     time.sleep(3)
 
 def search():
-    search_input = wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, ".search-global-typeahead__input")))
-    search_input.send_keys("oxford university")
-    search_input.send_keys(Keys.RETURN)
+    search_input = wait.until(EC.presence_of_element_located((By.XPATH, '//input[@placeholder="Search"]')))
+    search_input.click()
+
+    print("Waiting 25 seconds — you can type your search in LinkedIn and press Enter manually.")
+    time.sleep(20)  
+
+    print(" Resuming automation...")
+    time.sleep(3)
 
 def filters():
     people = wait.until(EC.element_to_be_clickable((By.XPATH, "//button[text()='People']")))
@@ -48,43 +53,29 @@ def click_all_checkboxes():
     checkboxes = driver.find_elements(By.XPATH, "//input[@type='checkbox']")
     print(f"Total checkboxes found: {len(checkboxes)}")
 
-    skip_ids = [
-        "advanced-filter-geoUrn-101022442",
-        "advanced-filter-currentCompany-4477",
-        "advanced-filter-currentCompany-6148",
-        "advanced-filter-currentCompany-1441",
-        "advanced-filter-currentCompany-1073",
-        "advanced-filter-currentCompany-4476",
-        "advanced-filter-pastCompany-4477",
-        "advanced-filter-pastCompany-6148",
-        "advanced-filter-pastCompany-1441",
-        "advanced-filter-pastCompany-1073",
-        "advanced-filter-pastCompany-1038",
-        "advanced-filter-schoolFilter-4476",
-        "advanced-filter-industry-1810",
-        "advanced-filter-industry-43",
-        "advanced-filter-profileLanguage-de",
-        "advanced-filter-profileLanguage-es",
-        "advanced-filter-profileLanguage-fr",
-        "advanced-filter-profileLanguage-pt",
-        "advanced-filter-openToVolunteer-true",
-        "advanced-filter-serviceCategory-220",
-        "advanced-filter-serviceCategory-50413",
-        "advanced-filter-serviceCategory-63",
-        "advanced-filter-serviceCategory-55800",
-        "advanced-filter-serviceCategory-2461"
+    select_ids = [
+        "advanced-filter-geoUrn-101165590",
+        "advanced-filter-geoUrn-102299470",
+        "advanced-filter-geoUrn-90009496",
+        "advanced-filter-geoUrn-102257491",
+        "advanced-filter-schoolFilter-4522",
+        "advanced-filter-schoolFilter-4477",
+        "advanced-filter-industry-1594",
+        "advanced-filter-industry-6",
+        "advanced-filter-industry-4",
+        "advanced-filter-profileLanguage-en",
     ]
 
     for checkbox in checkboxes:
         try:
             checkbox_id = checkbox.get_attribute("id")
-            if checkbox_id in skip_ids:
-                continue
-            if checkbox_id:
+            if checkbox_id in select_ids:
                 label = driver.find_element(By.XPATH, f"//label[@for='{checkbox_id}']")
                 driver.execute_script("arguments[0].scrollIntoView({behavior: 'smooth', block: 'center'});", label)
                 label.click()
                 time.sleep(0.1)
+            if checkbox_id:
+               continue
         except Exception as e:
             print(f"Error clicking checkbox: {e}")
 
@@ -169,18 +160,48 @@ currently_studying_profiles = []
 for link in all_profiles:
     driver.get(link)
     time.sleep(3)
-    driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
-    time.sleep(2)
+    try:
+        # Try to find and click the 'Show all education' link
+        education_link = wait.until(EC.presence_of_element_located((
+            By.XPATH, "//a[contains(@href, '#education')]"
+        )))
+        driver.execute_script("arguments[0].scrollIntoView({behavior: 'smooth', block: 'center'});", education_link)
+        time.sleep(1)
+        education_link.click()
+        print(f"Clicked 'Show all education' on: {link}")
+        time.sleep(2)
+    except Exception as e:
+        print(f"'Show all education' link not found for: {link}")
 
     try:
         edu_entries = driver.find_elements(By.XPATH, "//section[contains(@id, 'education')]//li")
         for entry in edu_entries:
-            if "present" in entry.text.lower() or "currently" in entry.text.lower():
+            text = entry.text.lower()
+
+            # Keyword match
+            if "present" in text or "currently" in text:
                 currently_studying_profiles.append(link)
-                print(f" Currently studying: {link}")
+                print(f"Currently studying (keyword match): {link}")
                 break
+
+            # Year-based check (e.g., "Aug 2024 - Jun 2025")
+            import re
+            from datetime import datetime
+
+            date_matches = re.findall(r'\b(\w+\s\d{4})\s*-\s*(\w+\s\d{4})\b', text)
+            for start, end in date_matches:
+                try:
+                    end_year = datetime.strptime(end, "%b %Y").year
+                    current_year = datetime.now().year
+                    if end_year >= current_year:
+                        currently_studying_profiles.append(link)
+                        print(f"Currently studying (year check): {link}")
+                        break
+                except Exception as e:
+                    print(f"Date parse error: {e}")
     except Exception as e:
-        print(f" Error checking education for {link}: {e}")
+        print(f"Error checking education for {link}: {e}")
+
 
 #  Save all profiles and filtered ones
 df_all = pd.DataFrame({'Profile Links': all_profiles})
