@@ -5,6 +5,9 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 import time
 import pandas as pd
+import time
+import re
+from datetime import datetime
 
 USERNAME = "ab5129326@gmail.com"
 PASSWORD = "AAbb321@"
@@ -160,15 +163,17 @@ currently_studying_profiles = []
 for link in all_profiles:
     driver.get(link)
     time.sleep(3)
+    found_show_all = False
+
     try:
-        # Try to find and click the 'Show all education' link
         education_link = wait.until(EC.presence_of_element_located((
-            By.XPATH, "//a[contains(@href, '#education')]"
+            By.ID, "navigation-index-see-all-education"
         )))
         driver.execute_script("arguments[0].scrollIntoView({behavior: 'smooth', block: 'center'});", education_link)
         time.sleep(1)
         education_link.click()
         print(f"Clicked 'Show all education' on: {link}")
+        found_show_all = True
         time.sleep(2)
     except Exception as e:
         print(f"'Show all education' link not found for: {link}")
@@ -178,30 +183,43 @@ for link in all_profiles:
         for entry in edu_entries:
             text = entry.text.lower()
 
-            # Keyword match
-            if "present" in text or "currently" in text:
-                currently_studying_profiles.append(link)
-                print(f"Currently studying (keyword match): {link}")
-                break
-
-            # Year-based check (e.g., "Aug 2024 - Jun 2025")
-            import re
-            from datetime import datetime
-
-            date_matches = re.findall(r'\b(\w+\s\d{4})\s*-\s*(\w+\s\d{4})\b', text)
-            for start, end in date_matches:
-                try:
-                    end_year = datetime.strptime(end, "%b %Y").year
-                    current_year = datetime.now().year
-                    if end_year >= current_year:
+            if found_show_all:
+                if any(degree in text for degree in ["bachelor", "bsc", "bs", "b.tech", "btech", "undergraduate"]):
+                    if "present" in text or "currently" in text:
                         currently_studying_profiles.append(link)
-                        print(f"Currently studying (year check): {link}")
+                        print(f"Graduation currently studying (keyword): {link}")
                         break
-                except Exception as e:
-                    print(f"Date parse error: {e}")
+                    date_matches = re.findall(r'\b(\w+\s\d{4})\s*-\s*(\w+\s\d{4}|present|currently)\b', text)
+                    for start, end in date_matches:
+                        try:
+                            if end.lower() in ["present", "currently"]:
+                                currently_studying_profiles.append(link)
+                                print(f"Graduation currently studying (ongoing): {link}")
+                                break
+                            end_year = datetime.strptime(end, "%b %Y").year
+                            if end_year >= 2025:
+                                currently_studying_profiles.append(link)
+                                print(f"Graduation currently studying (year ≥ 2025): {link}")
+                                break
+                        except Exception as e:
+                            print(f"Date parse error: {e}")
+            else:
+                if "present" in text or "currently" in text:
+                    currently_studying_profiles.append(link)
+                    print(f"Currently studying (keyword): {link}")
+                    break
+                date_matches = re.findall(r'\b(\w+\s\d{4})\s*-\s*(\w+\s\d{4})\b', text)
+                for start, end in date_matches:
+                    try:
+                        end_year = datetime.strptime(end, "%b %Y").year
+                        if end_year >= 2025:
+                            currently_studying_profiles.append(link)
+                            print(f"Currently studying (year ≥ 2025): {link}")
+                            break
+                    except Exception as e:
+                        print(f"Date parse error: {e}")
     except Exception as e:
         print(f"Error checking education for {link}: {e}")
-
 
 #  Save all profiles and filtered ones
 df_all = pd.DataFrame({'Profile Links': all_profiles})
