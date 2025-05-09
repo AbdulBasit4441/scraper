@@ -3,7 +3,7 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-import time
+from selenium.webdriver.common.action_chains import ActionChains
 import pandas as pd
 import time
 import re
@@ -97,8 +97,8 @@ def scroll_to_load():
 def getLinks(driver, wait):
     try:
         wait.until(EC.presence_of_element_located((
-            By.CSS_SELECTOR,
-            "ul.OTwhyBrRIjzkDqCQWvaMgSgHXVjmkFiPnI a[data-test-app-aware-link]"
+            By.XPATH,
+            "//a[contains(@href, '/in/') and @href != '']"
         )))
     except:
         print("No profile links found on page.")
@@ -107,8 +107,8 @@ def getLinks(driver, wait):
     time.sleep(3)
 
     anchors = driver.find_elements(
-        By.CSS_SELECTOR,
-        "ul.OTwhyBrRIjzkDqCQWvaMgSgHXVjmkFiPnI a[data-test-app-aware-link]"
+        By.XPATH,
+        "//a[contains(@href, '/in/') and @href != '']"
     )
 
     profile_links = []
@@ -136,8 +136,8 @@ scroll_and_click(show)
 time.sleep(5)
 
 all_profiles = []
-
-while True:
+def Pages():
+   while True:
     scroll_to_load()
     profiles = getLinks(driver, wait)
     all_profiles.extend(profiles)
@@ -156,19 +156,137 @@ while True:
         break
 
 all_profiles = list(set(all_profiles))
-
-#  NEW FEATURE: Check education section for "Currently Studying"
 currently_studying_profiles = []
 
-for link in all_profiles:
+Pages()
+
+def Post():
+   try:
+       print("Opening filter dropdown...")
+
+       # Step 1: Click the "People" filter dropdown button
+       filter_button = wait.until(EC.element_to_be_clickable(
+        (By.XPATH, "//button[@aria-label=' Filter by: People']")))
+       filter_button.click()
+       print("Filter dropdown clicked.")
+
+       time.sleep(2)  # Let the dropdown open and render
+
+       # Step 2: Try the precise XPath first (recommended way)
+       try:
+           posts_option_xpath = "//div[@role='menu']//span[text()='Posts']"
+           posts_option = wait.until(EC.element_to_be_clickable((By.XPATH, posts_option_xpath)))
+           driver.execute_script("arguments[0].scrollIntoView(true);", posts_option)
+           driver.execute_script("arguments[0].click();", posts_option)
+           print(" Successfully clicked the 'Posts' filter using precise XPath!")
+
+       except Exception as precise_error:
+           print(f" Precise XPath method failed: {precise_error}")
+           print(" Falling back to generic search for any element containing 'Posts'...")
+
+           posts_found = 0
+           all_elements = driver.find_elements(By.XPATH, "//span[normalize-space(text())='Posts']")
+
+           for elem in all_elements:
+               try:
+                   print(f"Found 'Posts' span: {elem.get_attribute('outerHTML')}")
+                   driver.execute_script("arguments[0].scrollIntoView(true);", elem)
+                   parent_button = elem.find_element(By.XPATH, "./ancestor::button")
+                   driver.execute_script("arguments[0].click();", parent_button)
+                   print(" Clicked the actual 'Posts' button!")
+                   posts_found += 1
+                   break
+               except Exception as click_error:
+                   print(f" Failed to click ancestor button: {click_error}")
+
+           if posts_found == 0:
+               print(" No clickable element found with exact text 'Posts'.")
+
+   except Exception as e:
+      print(f" Final error: {e}")
+
+def post_filter():
+    all_filters_btn = wait.until(EC.element_to_be_clickable((By.XPATH, "//button[text()='All filters']")))
+    scroll_and_click(all_filters_btn)
+    # Step 2: Click the 'Latest' radio button
+
+    time.sleep(2)
+    radio = driver.find_elements(By.XPATH, "//input[@type='radio']")
+    print(f"Total Radio found: {len(radio)}")
+
+    select_ids = [
+        "advanced-filter-sortBy-date_posted",
+        "advanced-filter-datePosted-past-24h",
+        "advanced-filter-contentType-photos",
+    ]
+
+    for r in radio:
+        try:
+            radio_id = r.get_attribute("id")
+            if radio_id in select_ids:
+                label = driver.find_element(By.XPATH, f"//label[@for='{radio_id}']")
+                driver.execute_script("arguments[0].scrollIntoView({behavior: 'smooth', block: 'center'});", label)
+                label.click()
+                time.sleep(0.1)
+            if radio_id:
+               continue
+        except Exception as e:
+            print(f"Error clicking checkbox: {e}")
+    # scroll_to_load()
+    show = wait.until(EC.element_to_be_clickable((By.XPATH, "//button[contains(., 'Show results')]")))
+    show.click()
+    time.sleep(2)
+
+def scroll_check_Post():
+     scroll_pause = 4
+     screen_height = driver.execute_script("return window.innerHeight")
+     scroll_height = driver.execute_script("return document.body.scrollHeight")
+
+     current_position = 0
+     while current_position < scroll_height:
+        driver.execute_script(f"window.scrollTo(50, {current_position});")
+        time.sleep(scroll_pause)
+        current_position += screen_height
+        scroll_height = driver.execute_script("return document.body.scrollHeight")
+     try:
+        wait.until(EC.presence_of_element_located((
+            By.CSS_SELECTOR,
+            "a[href*='/in/']"
+        )))
+     except:
+        print("No profile links found on page.")
+        return []
+
+     time.sleep(3)
+
+     anchors = driver.find_elements(
+        By.CSS_SELECTOR,
+       "a[href*='/in/']"
+    )
+     profile_links = []
+     for a in anchors:
+        raw = a.get_attribute("href") or ""
+        clean = raw.split('?')[0]
+        if "/in/" in clean and clean not in profile_links:
+            profile_links.append(clean)
+
+     print(f"Found {len(profile_links)} profile URLs:")
+     for link in profile_links:
+        print(link)
+     return profile_links
+
+Post()   
+post_filter()
+scroll_check_Post()
+def education():
+  # Check education section for "Currently Studying"
+  for link in all_profiles:
     driver.get(link)
     time.sleep(3)
     found_show_all = False
 
     try:
-        education_link = wait.until(EC.presence_of_element_located((
-            By.ID, "navigation-index-see-all-education"
-        )))
+        education_link = wait.until(EC.presence_of_element_located((By.ID, "navigation-index-see-all-education")))
         driver.execute_script("arguments[0].scrollIntoView({behavior: 'smooth', block: 'center'});", education_link)
         time.sleep(1)
         education_link.click()
@@ -183,44 +301,43 @@ for link in all_profiles:
         for entry in edu_entries:
             text = entry.text.lower()
 
-            if found_show_all:
-                if any(degree in text for degree in ["bachelor", "bsc", "bs", "b.tech", "btech", "undergraduate"]):
-                    if "present" in text or "currently" in text:
-                        currently_studying_profiles.append(link)
-                        print(f"Graduation currently studying (keyword): {link}")
-                        break
-                    date_matches = re.findall(r'\b(\w+\s\d{4})\s*-\s*(\w+\s\d{4}|present|currently)\b', text)
-                    for start, end in date_matches:
-                        try:
-                            if end.lower() in ["present", "currently"]:
-                                currently_studying_profiles.append(link)
-                                print(f"Graduation currently studying (ongoing): {link}")
-                                break
-                            end_year = datetime.strptime(end, "%b %Y").year
-                            if end_year >= 2025:
-                                currently_studying_profiles.append(link)
-                                print(f"Graduation currently studying (year ≥ 2025): {link}")
-                                break
-                        except Exception as e:
-                            print(f"Date parse error: {e}")
-            else:
-                if "present" in text or "currently" in text:
+            # Check for direct keywords
+            if "present" in text or "currently" in text:
+                if link not in currently_studying_profiles:
                     currently_studying_profiles.append(link)
                     print(f"Currently studying (keyword): {link}")
-                    break
-                date_matches = re.findall(r'\b(\w+\s\d{4})\s*-\s*(\w+\s\d{4})\b', text)
+                break
+
+            # Define date regex patterns
+            date_patterns = [
+                r'\b(\w+\s\d{4})\s*[-–—]\s*(\w+\s\d{4}|present|currently)\b',
+                r'\b(\d{4})\s*[-–—]\s*(\d{4}|present|currently)\b'
+            ]
+
+            for pattern in date_patterns:
+                date_matches = re.findall(pattern, text)
                 for start, end in date_matches:
                     try:
-                        end_year = datetime.strptime(end, "%b %Y").year
-                        if end_year >= 2025:
-                            currently_studying_profiles.append(link)
-                            print(f"Currently studying (year ≥ 2025): {link}")
+                        if end.lower() in ["present", "currently"] or 'present' in end.lower() or 'currently' in end.lower():
+                            if link not in currently_studying_profiles:
+                                currently_studying_profiles.append(link)
+                                print(f"Currently studying (ongoing): {link}")
                             break
+                        end_year_match = re.search(r'\d{4}', end)
+                        if end_year_match:
+                            end_year = int(end_year_match.group())
+                            if end_year >= 2025:
+                                if link not in currently_studying_profiles:
+                                    currently_studying_profiles.append(link)
+                                    print(f"Currently studying (year ≥ 2025): {link}")
+                                break
                     except Exception as e:
                         print(f"Date parse error: {e}")
     except Exception as e:
         print(f"Error checking education for {link}: {e}")
-
+ 
+ 
+education()
 #  Save all profiles and filtered ones
 df_all = pd.DataFrame({'Profile Links': all_profiles})
 df_all.to_excel('linkedin_all_profiles.xlsx', index=False)
